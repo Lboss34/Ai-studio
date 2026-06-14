@@ -183,6 +183,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required={!isLogin}
+                      autoComplete="name"
                       id="input-fullname"
                     />
                   </div>
@@ -204,6 +205,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       required={!isLogin}
+                      autoComplete="tel"
                       dir="ltr"
                       id="input-phone"
                     />
@@ -229,6 +231,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 dir="ltr"
                 id="input-email"
               />
@@ -251,6 +254,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete={isLogin ? "current-password" : "new-password"}
                 id="input-password"
               />
             </div>
