@@ -9,8 +9,25 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ESM to CJS path compatibility helpers
+const getCurrentFilePath = () => {
+  try {
+    return fileURLToPath(import.meta.url);
+  } catch {
+    return __filename || '';
+  }
+};
+
+const getCurrentDirectoryPath = () => {
+  try {
+    return path.dirname(getCurrentFilePath());
+  } catch {
+    return __dirname || process.cwd();
+  }
+};
+
+const __filenameCompat = getCurrentFilePath();
+const __dirnameCompat = getCurrentDirectoryPath();
 
 const app = express();
 const PORT = 3000;
