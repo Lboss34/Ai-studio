@@ -1,0 +1,6 @@
+{
+  "name": "EliteWealth",
+  "description": "بوابة ثراء النخبة - تطبيق مالي تفاعلي يتضمن تحديات معرفية ونظام ترقية يدوي واشتراكات كريبتو في بيئة كونية مظلمة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

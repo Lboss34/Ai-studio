@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-space: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --color-cosmic-bg: #0b0f17;
+  --color-cosmic-slate: #111823;
+  --color-cosmic-border: #1e293b;
+  --color-cosmic-amber: #f59e0b;
+  --color-cosmic-emerald: #10b981;
+}
+
+/* Base style adjustments for RTL/Futuristic vibe */
+body {
+  background-color: var(--color-cosmic-bg);
+  color: #f1f5f9;
+  font-family: var(--font-sans);
+  direction: rtl;
+  overflow-x: hidden;
+}
+
+/* Glowing gold/amber neon text or border utilities */
+.glow-amber {
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.glow-border {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.glow-emerald {
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+/* Custom scrollbar for professional premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f17;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
