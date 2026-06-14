@@ -811,144 +811,205 @@ export default function App() {
               {activeTab === 'quiz' && (
                 <div className="col-span-12 bg-slate-900/50 border border-slate-800 rounded-3xl p-6 sm:p-8 flex flex-col gap-5 min-h-[420px]" id="tab-content-quiz">
                   
-                  {/* Quiz Top Action row */}
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs font-mono font-bold">
-                        التحدي رقم #{ (user.tasksCompleted + 1) }
-                      </span>
-                      <span className="h-4 w-px bg-slate-705" />
-                      <span className="text-xs text-amber-400 flex items-center gap-1 font-semibold">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        الجائزة الفورية: ${(user.tasksCompleted % 2 === 0 ? 5.00 : 3.00).toFixed(2)} USDT
-                      </span>
-                    </div>
+                  {!user.depositStatus && user.tasksCompleted >= 5 ? (
+                    <div className="flex-grow flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto my-6" id="limit-lockscreen">
+                      <div className="relative mb-6">
+                        <div className="absolute inset-0 bg-amber-500/10 rounded-full blur-xl scale-125 animate-pulse" />
+                        <div className="relative p-6 bg-slate-950 border-2 border-amber-500/40 rounded-full text-amber-500 shadow-md">
+                          <Lock className="h-10 w-10" />
+                        </div>
+                      </div>
 
-                    <p className="text-xs text-slate-400 hidden sm:block">
-                      لا توجد فترات انتظار متبقية. يمكنك الإجابة بالتتالي!
-                    </p>
-                  </div>
-
-                  {/* Loading overlay for quizzes */}
-                  {quizLoading ? (
-                    <div className="flex-grow flex flex-col items-center justify-center p-12 text-center">
-                      <div className="h-10 w-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
-                      <p className="text-sm text-slate-400 font-medium">جاري مزامنة الكتلة وسحب التحدي المالي المفتوح...</p>
-                    </div>
-                  ) : quizQuestion ? (
-                    <div className="flex-grow flex flex-col justify-between">
+                      <h3 className="text-2xl sm:text-3xl font-extrabold text-white leading-relaxed font-space mb-3">
+                        عذراً، ينبغي تفعيل ترقيتك للمتابعة!
+                      </h3>
                       
-                      {/* Question Main heading */}
-                      <div className="max-w-3xl mx-auto text-center my-6">
-                        <HelpCircle className="h-8 w-8 text-amber-500/30 mx-auto mb-3" />
-                        <h4 className="text-xl sm:text-2xl font-extrabold text-white leading-relaxed font-space">
-                          {quizQuestion.question}
-                        </h4>
+                      <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-6">
+                        لقد أكملت بنجاح كامل الحصة الترحيبية المجانية المقدرة بـ <span className="text-amber-400 font-bold">5 مهام</span> وحصلت فيها على عائد تراكمي مقدر بـ <span className="text-emerald-400 font-bold">${user.balance.toFixed(2)} USDT</span>.
+                        <br />
+                        <span className="text-slate-400 text-xs mt-2 block">
+                          لمواصلة أداء المهام المعرفية الإضافية (وصولاً إلى 100 مهمة بالمسيرة) وتحرير بوابة السحب الآمن، يتطلب النظام تنشيط رخصة النخبة الذكية عبر أداء إيداع تفاعلي لمرة واحدة بمقدار 22.00 USDT.
+                        </span>
+                      </p>
+
+                      <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl w-full mb-6">
+                        <div className="flex justify-around items-center gap-4 text-center">
+                          <div>
+                            <span className="block text-[10px] text-slate-500 font-bold uppercase">رصيدك المتراكم حالياً</span>
+                            <span className="text-lg font-bold text-emerald-400 font-mono">${user.balance.toFixed(2)}</span>
+                          </div>
+                          <div className="w-px h-8 bg-slate-800" />
+                          <div>
+                            <span className="block text-[10px] text-slate-500 font-bold uppercase">المهام المكتملة</span>
+                            <span className="text-lg font-semibold text-white">5 / 100</span>
+                          </div>
+                          <div className="w-px h-8 bg-slate-800" />
+                          <div>
+                            <span className="block text-[10px] text-slate-500 font-bold uppercase">حالة الحساب الحالي</span>
+                            <span className="text-xs font-bold text-amber-500 animate-pulse">مطلوب ترقية ⚠️</span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Options Grid Layout */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto w-full mb-6">
-                        {quizQuestion.options.map((option: string, idx: number) => {
-                          let optionStyle = 'bg-slate-900/60 border-slate-800 text-slate-350 hover:bg-slate-800/40 hover:border-slate-700 hover:text-white';
-                          
-                          if (selectedOption === idx) {
-                            optionStyle = 'bg-amber-500/10 border-amber-500 text-amber-400 ring-2 ring-amber-500/15';
-                          }
-
-                          if (hasSubmitted) {
-                            // If correct result is processed
-                            if (submitResult?.correct) {
-                              if (selectedOption === idx) {
-                                optionStyle = 'bg-emerald-500/10 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/20';
-                              }
-                            } else {
-                              if (selectedOption === idx) {
-                                optionStyle = 'bg-red-500/10 border-red-500 text-red-400 ring-2 ring-red-500/20';
-                              }
-                            }
-                          }
-
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => {
-                                if (!hasSubmitted) {
-                                  setSelectedOption(idx);
-                                }
-                              }}
-                              disabled={hasSubmitted}
-                              className={`py-4 px-5 rounded-2xl border text-right font-medium transition-all duration-150 flex items-center justify-between text-sm cursor-pointer ${optionStyle}`}
-                            >
-                              <span>{option}</span>
-                              <span className="font-mono text-xs opacity-40 ml-1">
-                                {idx === 0 ? 'أ' : idx === 1 ? 'ب' : idx === 2 ? 'ج' : 'د'}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                        <button
+                          onClick={() => setActiveTab('upgrade')}
+                          className="flex-grow py-3.5 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 text-center cursor-pointer"
+                          id="goto-upgrade-tab-btn"
+                        >
+                          تفعيل رخصة النخبة بالـ 22$ الآن 👋
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('stats')}
+                          className="py-3.5 px-5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 font-medium rounded-xl transition-all text-center cursor-pointer"
+                          id="goto-stats-tab-btn"
+                        >
+                          عرض الأرباح والإحصائيات
+                        </button>
                       </div>
-
-                      {/* Answer Feedback Alerts / Explanations */}
-                      <AnimatePresence>
-                        {hasSubmitted && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className={`p-5 rounded-2xl max-w-3xl mx-auto w-full border ${
-                              submitResult?.correct 
-                                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' 
-                                : 'bg-red-500/5 border-red-500/20 text-red-300'
-                            } text-right text-xs sm:text-sm space-y-2 mb-6`}
-                          >
-                            <div className="flex items-center gap-2 font-bold mb-1">
-                              {submitResult?.correct ? (
-                                <>
-                                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                                  <span>ممتاز! إجابة دقيقة وحكيمة.</span>
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="h-5 w-5 text-red-400" />
-                                  <span>إجابة خاطئة حالياً!</span>
-                                </>
-                              )}
-                            </div>
-                            <p className="leading-relaxed opacity-90">
-                              {submitResult?.correct 
-                                ? submitResult.explanation
-                                : submitResult?.message
-                              }
-                            </p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Action trigger row */}
-                      <div className="flex justify-center gap-4 border-t border-slate-800/60 pt-5">
-                        {!hasSubmitted ? (
-                          <button
-                            onClick={handleQuizSubmit}
-                            disabled={selectedOption === null}
-                            className="px-8 py-3.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-950 rounded-xl text-sm transition-all shadow-md active:scale-95 cursor-pointer"
-                          >
-                            تأكيد الإجابة وإقرار المعاملة الكونية
-                          </button>
-                        ) : (
-                          <button
-                            onClick={fetchCurrentQuestion}
-                            className="px-8 py-3.5 bg-slate-800 hover:bg-slate-750 font-bold text-white rounded-xl text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
-                          >
-                            <span>تحميل التحدي المعرفي التالي</span>
-                            <ChevronLeft className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-
                     </div>
                   ) : (
-                    <div className="flex-grow flex flex-col items-center justify-center text-center">
-                      <p className="text-sm text-slate-400">انتهت الجعبة الحالية للأسئلة بالسرور. يرجى المتابعة لاحقاً!</p>
-                    </div>
+                    <>
+                      {/* Quiz Top Action row */}
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs font-mono font-bold">
+                            التحدي رقم #{ (user.tasksCompleted + 1) }
+                          </span>
+                          <span className="h-4 w-px bg-slate-705" />
+                          <span className="text-xs text-amber-400 flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            الجائزة الفورية: ${(user.tasksCompleted % 2 === 0 ? 5.00 : 3.00).toFixed(2)} USDT
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-400 hidden sm:block">
+                          لا توجد فترات انتظار متبقية. يمكنك الإجابة بالتتالي!
+                        </p>
+                      </div>
+
+                      {/* Loading overlay for quizzes */}
+                      {quizLoading ? (
+                        <div className="flex-grow flex flex-col items-center justify-center p-12 text-center">
+                          <div className="h-10 w-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+                          <p className="text-sm text-slate-400 font-medium">جاري مزامنة الكتلة وسحب التحدي المالي المفتوح...</p>
+                        </div>
+                      ) : quizQuestion ? (
+                        <div className="flex-grow flex flex-col justify-between">
+                          
+                          {/* Question Main heading */}
+                          <div className="max-w-3xl mx-auto text-center my-6">
+                            <HelpCircle className="h-8 w-8 text-amber-500/30 mx-auto mb-3" />
+                            <h4 className="text-xl sm:text-2xl font-extrabold text-white leading-relaxed font-space">
+                              {quizQuestion.question}
+                            </h4>
+                          </div>
+
+                          {/* Options Grid Layout */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto w-full mb-6">
+                            {quizQuestion.options.map((option: string, idx: number) => {
+                              let optionStyle = 'bg-slate-900/60 border-slate-800 text-slate-350 hover:bg-slate-800/40 hover:border-slate-700 hover:text-white';
+                              
+                              if (selectedOption === idx) {
+                                optionStyle = 'bg-amber-500/10 border-amber-500 text-amber-400 ring-2 ring-amber-500/15';
+                              }
+
+                              if (hasSubmitted) {
+                                // If correct result is processed
+                                if (submitResult?.correct) {
+                                  if (selectedOption === idx) {
+                                    optionStyle = 'bg-emerald-500/10 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/20';
+                                  }
+                                } else {
+                                  if (selectedOption === idx) {
+                                    optionStyle = 'bg-red-500/10 border-red-500 text-red-400 ring-2 ring-red-500/20';
+                                  }
+                                }
+                              }
+
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    if (!hasSubmitted) {
+                                      setSelectedOption(idx);
+                                    }
+                                  }}
+                                  disabled={hasSubmitted}
+                                  className={`py-4 px-5 rounded-2xl border text-right font-medium transition-all duration-150 flex items-center justify-between text-sm cursor-pointer ${optionStyle}`}
+                                >
+                                  <span>{option}</span>
+                                  <span className="font-mono text-xs opacity-40 ml-1">
+                                    {idx === 0 ? 'أ' : idx === 1 ? 'ب' : idx === 2 ? 'ج' : 'د'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Answer Feedback Alerts / Explanations */}
+                          <AnimatePresence>
+                            {hasSubmitted && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className={`p-5 rounded-2xl max-w-3xl mx-auto w-full border ${
+                                  submitResult?.correct 
+                                    ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' 
+                                    : 'bg-red-500/5 border-red-500/20 text-red-300'
+                                } text-right text-xs sm:text-sm space-y-2 mb-6`}
+                              >
+                                <div className="flex items-center gap-2 font-bold mb-1">
+                                  {submitResult?.correct ? (
+                                    <>
+                                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                                      <span>ممتاز! إجابة دقيقة وحكيمة.</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircle className="h-5 w-5 text-red-400" />
+                                      <span>إجابة خاطئة حالياً!</span>
+                                    </>
+                                  )}
+                                </div>
+                                <p className="leading-relaxed opacity-90">
+                                  {submitResult?.correct 
+                                    ? submitResult.explanation
+                                    : submitResult?.message
+                                  }
+                                </p>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Action trigger row */}
+                          <div className="flex justify-center gap-4 border-t border-slate-800/60 pt-5">
+                            {!hasSubmitted ? (
+                              <button
+                                onClick={handleQuizSubmit}
+                                disabled={selectedOption === null}
+                                className="px-8 py-3.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-950 rounded-xl text-sm transition-all shadow-md active:scale-95 cursor-pointer"
+                              >
+                                تأكيد الإجابة وإقرار المعاملة الكونية
+                              </button>
+                            ) : (
+                              <button
+                                onClick={fetchCurrentQuestion}
+                                className="px-8 py-3.5 bg-slate-800 hover:bg-slate-750 font-bold text-white rounded-xl text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
+                              >
+                                <span>تحميل التحدي المعرفي التالي</span>
+                                <ChevronLeft className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="flex-grow flex flex-col items-center justify-center text-center">
+                          <p className="text-sm text-slate-400">انتهت الجعبة الحالية للأسئلة بالسرور. يرجى المتابعة لاحقاً!</p>
+                        </div>
+                      )}
+                    </>
                   )}
 
                 </div>

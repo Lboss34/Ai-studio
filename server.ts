@@ -213,6 +213,15 @@ app.get('/api/quiz/question', (req, res) => {
   }
 
   const user = usersDb[email];
+
+  // Enforce 5-task limit for non-upgraded users
+  if (!user.depositStatus && user.tasksCompleted >= 5) {
+    return res.status(403).json({ 
+      error: 'LIMIT_REACHED', 
+      message: 'لقد استنفدت الحد الأقصى للمهام المجانية (5 مهام). يرجى الاشتراك وتفعيل ترخيص النخبة ($22.00 USDT) لمواصلة جني الأرباح وفتح بقية المهام.' 
+    });
+  }
+
   const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
   const currentQuestion = QUESTIONS_BANK[questionIndex];
 
@@ -237,6 +246,13 @@ app.post('/api/quiz/submit', (req, res) => {
   const user = usersDb[normalizedEmail];
   if (!user) {
     return res.status(404).json({ error: 'المستخدم غير موجود بالخادم' });
+  }
+
+  // Enforce 5-task limit for non-upgraded users
+  if (!user.depositStatus && user.tasksCompleted >= 5) {
+    return res.status(403).json({ 
+      error: 'لقد استنفدت الحد الأقصى للماهية المجانية (5 مهام). يرجى تفعيل ترخيص النخبة لمتابعة العمل والوصول لـ 100 مهمة.' 
+    });
   }
 
   const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
