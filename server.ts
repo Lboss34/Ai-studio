@@ -153,18 +153,129 @@ function saveUsers() {
 // Initial DB load
 loadUsers();
 
+// Interface for DB operations to easily support offline JSON & Real Cloud Firestore
+interface DBAdapter {
+  getUser(email: string): Promise<UserRecord | null>;
+  saveUser(email: string, user: UserRecord): Promise<void>;
+  getAllUsers(): Promise<UserRecord[]>;
+}
+
+class JSONFileDbAdapter implements DBAdapter {
+  async getUser(email: string): Promise<UserRecord | null> {
+    const normalizedEmail = email.trim().toLowerCase();
+    return usersDb[normalizedEmail] || null;
+  }
+  async saveUser(email: string, user: UserRecord): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    usersDb[normalizedEmail] = user;
+    saveUsers();
+  }
+  async getAllUsers(): Promise<UserRecord[]> {
+    return Object.values(usersDb);
+  }
+}
+
+let dbAdapter: DBAdapter = new JSONFileDbAdapter();
+let isFirestoreMode = false;
+
+async function setupDatabaseAdapter() {
+  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    try {
+      const configData = fs.readFileSync(firebaseConfigPath, 'utf-8');
+      const firebaseConfig = JSON.parse(configData);
+      
+      const { initializeApp } = await import('firebase/app');
+      const { getFirestore, doc, getDoc, setDoc, getDocs, collection } = await import('firebase/firestore');
+      
+      const firebaseApp = initializeApp(firebaseConfig);
+      const firestore = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+      
+      class FirestoreDbAdapter implements DBAdapter {
+        private fsdb = firestore;
+        async getUser(email: string): Promise<UserRecord | null> {
+          const normalizedEmail = email.trim().toLowerCase();
+          try {
+            const docRef = doc(this.fsdb, 'users', normalizedEmail);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              return docSnap.data() as UserRecord;
+            }
+          } catch (err) {
+            console.error('Error fetching user from Firestore:', err);
+          }
+          return null;
+        }
+        async saveUser(email: string, user: UserRecord): Promise<void> {
+          const normalizedEmail = email.trim().toLowerCase();
+          try {
+            const docRef = doc(this.fsdb, 'users', normalizedEmail);
+            await setDoc(docRef, user);
+          } catch (err) {
+            console.error('Error saving user to Firestore:', err);
+            throw err;
+          }
+        }
+        async getAllUsers(): Promise<UserRecord[]> {
+          try {
+            const querySnapshot = await getDocs(collection(this.fsdb, 'users'));
+            const list: UserRecord[] = [];
+            querySnapshot.forEach((docSnap) => {
+              list.push(docSnap.data() as UserRecord);
+            });
+            return list;
+          } catch (err) {
+            console.error('Error listing users from Firestore:', err);
+            return [];
+          }
+        }
+      }
+      
+      const firestoreAdapter = new FirestoreDbAdapter();
+      dbAdapter = firestoreAdapter;
+      isFirestoreMode = true;
+      console.log('✅ Connected successfully to REAL cloud database (Firestore).');
+      
+      // Perform automated, seamless migration from elite_users_db.json
+      try {
+        const localUsers = Object.values(usersDb);
+        if (localUsers.length > 0) {
+          console.log(`Syncing ${localUsers.length} existing users to Firebase...`);
+          for (const u of localUsers) {
+            const extUser = await firestoreAdapter.getUser(u.email);
+            if (!extUser) {
+              await firestoreAdapter.saveUser(u.email, u);
+            }
+          }
+          console.log('🎉 Database sync & migration completed.');
+        }
+      } catch (migrationErr) {
+        console.error('Database migration sync warning:', migrationErr);
+      }
+      
+    } catch (err) {
+      console.error('🚨 Failed to initialize Firestore SDK, falling back to local database mode:', err);
+      dbAdapter = new JSONFileDbAdapter();
+      isFirestoreMode = false;
+    }
+  } else {
+    console.log('⚠️ No firebase-applet-config.json was found. Operating in local-file mode. (Please accept terms in the build assistant panel to link Firestore if needed).');
+  }
+}
+
 // API REST routes
 // ----------------
 
 // Register
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { fullName, email, phone, password } = req.body;
   if (!fullName || !email || !phone || !password) {
     return res.status(400).json({ error: 'الرجاء ملء جميع الحقول المطلوبة للتسجيل' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  if (usersDb[normalizedEmail]) {
+  const existingUser = await dbAdapter.getUser(normalizedEmail);
+  if (existingUser) {
     return res.status(400).json({ error: 'عذراً، هذا البريد الإلكتروني مسجل مسبقاً لدينا' });
   }
 
@@ -181,22 +292,21 @@ app.post('/api/auth/register', (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  usersDb[normalizedEmail] = newUser;
-  saveUsers();
+  await dbAdapter.saveUser(normalizedEmail, newUser);
 
   const { password: _, ...safeUser } = newUser;
   return res.json({ success: true, user: safeUser });
 });
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'الرجاء إدخال البريد الإلكتروني وكلمة المرور' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user || user.password !== password) {
     return res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
   }
@@ -206,14 +316,14 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // Update specific task state & active user sync
-app.post('/api/users/me', (req, res) => {
+app.post('/api/users/me', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'مطلوب بريد إلكتروني صالح للمزامنة' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) {
     return res.status(404).json({ error: 'المستخدم غير موجود' });
   }
@@ -223,13 +333,16 @@ app.post('/api/users/me', (req, res) => {
 });
 
 // Get quiz question based on task limit context (circular wrap)
-app.get('/api/quiz/question', (req, res) => {
+app.get('/api/quiz/question', async (req, res) => {
   const email = (req.query.email as string || '').trim().toLowerCase();
-  if (!email || !usersDb[email]) {
+  if (!email) {
     return res.status(400).json({ error: 'يرجى تسجيل الدخول للحصول على الأسئلة المعرفية' });
   }
 
-  const user = usersDb[email];
+  const user = await dbAdapter.getUser(email);
+  if (!user) {
+    return res.status(404).json({ error: 'المستخدم غير متوفر' });
+  }
 
   // Enforce 5-task limit for non-upgraded users
   if (!user.depositStatus && user.tasksCompleted >= 5) {
@@ -253,14 +366,14 @@ app.get('/api/quiz/question', (req, res) => {
 });
 
 // Submit quiz and calculate instant prize
-app.post('/api/quiz/submit', (req, res) => {
+app.post('/api/quiz/submit', async (req, res) => {
   const { email, selectedIndex } = req.body;
   if (!email || selectedIndex === undefined) {
     return res.status(400).json({ error: 'معلومات الإرسال غير كاملة' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) {
     return res.status(404).json({ error: 'المستخدم غير موجود بالخادم' });
   }
@@ -281,7 +394,7 @@ app.post('/api/quiz/submit', (req, res) => {
     
     user.balance += reward;
     user.tasksCompleted += 1;
-    saveUsers();
+    await dbAdapter.saveUser(normalizedEmail, user);
 
     const { password: _, ...safeUser } = user;
     return res.json({
@@ -303,21 +416,21 @@ app.post('/api/quiz/submit', (req, res) => {
 });
 
 // Upgrade activation registration (BEP-20 Manual Crypto payment)
-app.post('/api/upgrade/submit', (req, res) => {
+app.post('/api/upgrade/submit', async (req, res) => {
   const { email, customTxId } = req.body;
   if (!email || !customTxId) {
     return res.status(400).json({ error: 'يرجى إدخال عنوان الإرسال أو رقم المعاملة TxID بشكل صحيح' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) {
     return res.status(404).json({ error: 'المستخدم غير مسجل' });
   }
 
   user.customTxId = customTxId.trim();
   user.manualDepositStatus = 'pending';
-  saveUsers();
+  await dbAdapter.saveUser(normalizedEmail, user);
 
   const { password: _, ...safeUser } = user;
   return res.json({ success: true, user: safeUser });
@@ -338,8 +451,8 @@ const adminGate = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-app.get('/api/admin/metrics', adminGate, (req, res) => {
-  const users = Object.values(usersDb);
+app.get('/api/admin/metrics', adminGate, async (req, res) => {
+  const users = await dbAdapter.getAllUsers();
   const totalUsers = users.length;
   const totalBalances = users.reduce((acc, curr) => acc + curr.balance, 0);
   const pendingActivations = users.filter(u => u.manualDepositStatus === 'pending').length;
@@ -353,49 +466,50 @@ app.get('/api/admin/metrics', adminGate, (req, res) => {
   });
 });
 
-app.get('/api/admin/users', adminGate, (req, res) => {
-  const users = Object.values(usersDb).map(({ password: _, ...u }) => u);
+app.get('/api/admin/users', adminGate, async (req, res) => {
+  const usersRaw = await dbAdapter.getAllUsers();
+  const users = usersRaw.map(({ password: _, ...u }) => u);
   res.json({ users });
 });
 
-app.post('/api/admin/approve', adminGate, (req, res) => {
+app.post('/api/admin/approve', adminGate, async (req, res) => {
   const { userEmail } = req.body;
   if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
 
   const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
 
   user.manualDepositStatus = 'approved';
   user.depositStatus = true;
-  saveUsers();
+  await dbAdapter.saveUser(normalizedEmail, user);
 
   const { password: _, ...safeUser } = user;
   res.json({ success: true, user: safeUser });
 });
 
-app.post('/api/admin/reject', adminGate, (req, res) => {
+app.post('/api/admin/reject', adminGate, async (req, res) => {
   const { userEmail } = req.body;
   if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
 
   const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
 
   user.manualDepositStatus = 'rejected';
   user.depositStatus = false;
-  saveUsers();
+  await dbAdapter.saveUser(normalizedEmail, user);
 
   const { password: _, ...safeUser } = user;
   res.json({ success: true, user: safeUser });
 });
 
-app.post('/api/admin/override', adminGate, (req, res) => {
+app.post('/api/admin/override', adminGate, async (req, res) => {
   const { userEmail, newBalance, newTasksCompleted } = req.body;
   if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
 
   const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = usersDb[normalizedEmail];
+  const user = await dbAdapter.getUser(normalizedEmail);
   if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر في قاعدة البيانات' });
 
   if (newBalance !== undefined) {
@@ -405,7 +519,7 @@ app.post('/api/admin/override', adminGate, (req, res) => {
     user.tasksCompleted = parseInt(newTasksCompleted, 10);
   }
 
-  saveUsers();
+  await dbAdapter.saveUser(normalizedEmail, user);
 
   const { password: _, ...safeUser } = user;
   res.json({ success: true, user: safeUser });
@@ -413,6 +527,8 @@ app.post('/api/admin/override', adminGate, (req, res) => {
 
 // Setup dev and production servers
 async function startServer() {
+  await setupDatabaseAdapter();
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

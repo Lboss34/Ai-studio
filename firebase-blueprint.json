@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "EliteWealth user profiles and state tracking",
+      "type": "object",
+      "properties": {
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Normalized email address"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number including country code"
+        },
+        "balance": {
+          "type": "number",
+          "description": "Current earned wallet balance"
+        },
+        "tasksCompleted": {
+          "type": "number",
+          "description": "Number of quiz tasks completed"
+        },
+        "depositStatus": {
+          "type": "boolean",
+          "description": "Is the elite upgraded license active"
+        },
+        "manualDepositStatus": {
+          "type": "string",
+          "enum": ["none", "pending", "approved", "rejected"],
+          "description": "Status of the manual USDT BEP-20 transaction"
+        },
+        "customTxId": {
+          "type": "string",
+          "description": "The exact transaction hash/TxID submitted by the user"
+        },
+        "password": {
+          "type": "string",
+          "description": "Registration password"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp representing user creation"
+        }
+      },
+      "required": [
+        "fullName",
+        "email",
+        "phone",
+        "balance",
+        "tasksCompleted",
+        "depositStatus",
+        "manualDepositStatus",
+        "customTxId",
+        "password",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{email}": {
+      "schema": "User",
+      "description": "User account documents identified by their lowercase registered email address"
+    }
+  }
+}
