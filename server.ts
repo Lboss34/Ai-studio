@@ -268,172 +268,202 @@ async function setupDatabaseAdapter() {
 
 // Register
 app.post('/api/auth/register', async (req, res) => {
-  const { fullName, email, phone, password } = req.body;
-  if (!fullName || !email || !phone || !password) {
-    return res.status(400).json({ error: 'الرجاء ملء جميع الحقول المطلوبة للتسجيل' });
+  try {
+    const { fullName, email, phone, password } = req.body;
+    if (!fullName || !email || !phone || !password) {
+      return res.status(400).json({ error: 'الرجاء ملء جميع الحقول المطلوبة للتسجيل' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingUser = await dbAdapter.getUser(normalizedEmail);
+    if (existingUser) {
+      return res.status(400).json({ error: 'عذراً، هذا البريد الإلكتروني مسجل مسبقاً لدينا' });
+    }
+
+    const newUser: UserRecord = {
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      phone: phone.trim(),
+      balance: 0.00,
+      tasksCompleted: 0,
+      depositStatus: false,
+      manualDepositStatus: 'none',
+      customTxId: '',
+      password: password,
+      createdAt: new Date().toISOString()
+    };
+
+    await dbAdapter.saveUser(normalizedEmail, newUser);
+
+    const { password: _, ...safeUser } = newUser;
+    return res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/auth/register:', error);
+    return res.status(500).json({ error: 'عذراً، حدث خطأ في النظام أو فشل في الاتصال بقاعدة البيانات. الرجاء المحاولة مجدداً.' });
   }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const existingUser = await dbAdapter.getUser(normalizedEmail);
-  if (existingUser) {
-    return res.status(400).json({ error: 'عذراً، هذا البريد الإلكتروني مسجل مسبقاً لدينا' });
-  }
-
-  const newUser: UserRecord = {
-    fullName: fullName.trim(),
-    email: normalizedEmail,
-    phone: phone.trim(),
-    balance: 0.00,
-    tasksCompleted: 0,
-    depositStatus: false,
-    manualDepositStatus: 'none',
-    customTxId: '',
-    password: password,
-    createdAt: new Date().toISOString()
-  };
-
-  await dbAdapter.saveUser(normalizedEmail, newUser);
-
-  const { password: _, ...safeUser } = newUser;
-  return res.json({ success: true, user: safeUser });
 });
 
 // Login
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'الرجاء إدخال البريد الإلكتروني وكلمة المرور' });
-  }
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'الرجاء إدخال البريد الإلكتروني وكلمة المرور' });
+    }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user || user.password !== password) {
-    return res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
-  }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user || user.password !== password) {
+      return res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' });
+    }
 
-  const { password: _, ...safeUser } = user;
-  return res.json({ success: true, user: safeUser });
+    const { password: _, ...safeUser } = user;
+    return res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/auth/login:', error);
+    return res.status(500).json({ error: 'عذراً، فشل الاتصال بقاعدة البيانات. الرجاء المحاولة لاحقاً.' });
+  }
 });
 
 // Update specific task state & active user sync
 app.post('/api/users/me', async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'مطلوب بريد إلكتروني صالح للمزامنة' });
-  }
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'مطلوب بريد إلكتروني صالح للمزامنة' });
+    }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) {
-    return res.status(404).json({ error: 'المستخدم غير موجود' });
-  }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
 
-  const { password: _, ...safeUser } = user;
-  return res.json({ success: true, user: safeUser });
+    const { password: _, ...safeUser } = user;
+    return res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/users/me:', error);
+    return res.status(500).json({ error: 'عذراً، فشل الاتصال بقاعدة البيانات للمزامنة.' });
+  }
 });
 
 // Get quiz question based on task limit context (circular wrap)
 app.get('/api/quiz/question', async (req, res) => {
-  const email = (req.query.email as string || '').trim().toLowerCase();
-  if (!email) {
-    return res.status(400).json({ error: 'يرجى تسجيل الدخول للحصول على الأسئلة المعرفية' });
-  }
+  try {
+    const email = (req.query.email as string || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: 'يرجى تسجيل الدخول للحصول على الأسئلة المعرفية' });
+    }
 
-  const user = await dbAdapter.getUser(email);
-  if (!user) {
-    return res.status(404).json({ error: 'المستخدم غير متوفر' });
-  }
+    const user = await dbAdapter.getUser(email);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير متوفر' });
+    }
 
-  // Enforce 5-task limit for non-upgraded users
-  if (!user.depositStatus && user.tasksCompleted >= 5) {
-    return res.status(403).json({ 
-      error: 'LIMIT_REACHED', 
-      message: 'لقد استنفدت الحد الأقصى للمهام المجانية (5 مهام). يرجى الاشتراك وتفعيل ترخيص النخبة ($22.00 USDT) لمواصلة جني الأرباح وفتح بقية المهام.' 
+    // Enforce 5-task limit for non-upgraded users
+    if (!user.depositStatus && user.tasksCompleted >= 5) {
+      return res.status(403).json({ 
+        error: 'LIMIT_REACHED', 
+        message: 'لقد استنفدت الحد الأقصى للمهام المجانية (5 مهام). يرجى الاشتراك وتفعيل ترخيص النخبة ($22.00 USDT) لمواصلة جني الأرباح وفتح بقية المهام.' 
+      });
+    }
+
+    const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
+    const currentQuestion = QUESTIONS_BANK[questionIndex];
+
+    // Return question, options and index info, but mask correctIndex for security
+    res.json({
+      id: currentQuestion.id,
+      question: currentQuestion.question,
+      options: currentQuestion.options,
+      currentIndex: user.tasksCompleted,
+      rewardAmount: user.tasksCompleted % 2 === 0 ? 5.00 : 3.00
     });
+  } catch (error) {
+    console.error('Error in /api/quiz/question:', error);
+    return res.status(500).json({ error: 'عذراً، فشل تحميل السؤال من قاعدة البيانات.' });
   }
-
-  const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
-  const currentQuestion = QUESTIONS_BANK[questionIndex];
-
-  // Return question, options and index info, but mask correctIndex for security
-  res.json({
-    id: currentQuestion.id,
-    question: currentQuestion.question,
-    options: currentQuestion.options,
-    currentIndex: user.tasksCompleted,
-    rewardAmount: user.tasksCompleted % 2 === 0 ? 5.00 : 3.00
-  });
 });
 
 // Submit quiz and calculate instant prize
 app.post('/api/quiz/submit', async (req, res) => {
-  const { email, selectedIndex } = req.body;
-  if (!email || selectedIndex === undefined) {
-    return res.status(400).json({ error: 'معلومات الإرسال غير كاملة' });
-  }
+  try {
+    const { email, selectedIndex } = req.body;
+    if (!email || selectedIndex === undefined) {
+      return res.status(400).json({ error: 'معلومات الإرسال غير كاملة' });
+    }
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) {
-    return res.status(404).json({ error: 'المستخدم غير موجود بالخادم' });
-  }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير موجود بالخادم' });
+    }
 
-  // Enforce 5-task limit for non-upgraded users
-  if (!user.depositStatus && user.tasksCompleted >= 5) {
-    return res.status(403).json({ 
-      error: 'لقد استنفدت الحد الأقصى للماهية المجانية (5 مهام). يرجى تفعيل ترخيص النخبة لمتابعة العمل والوصول لـ 100 مهمة.' 
-    });
-  }
+    // Enforce 5-task limit for non-upgraded users
+    if (!user.depositStatus && user.tasksCompleted >= 5) {
+      return res.status(403).json({ 
+        error: 'لقد استنفدت الحد الأقصى للماهية المجانية (5 مهام). يرجى تفعيل ترخيص النخبة لمتابعة العمل والوصول لـ 100 مهمة.' 
+      });
+    }
 
-  const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
-  const currentQuestion = QUESTIONS_BANK[questionIndex];
+    const questionIndex = user.tasksCompleted % QUESTIONS_BANK.length;
+    const currentQuestion = QUESTIONS_BANK[questionIndex];
 
-  if (selectedIndex === currentQuestion.correctIndex) {
-    // Reward amount calculations: $5 even, $3 odd index
-    const reward = user.tasksCompleted % 2 === 0 ? 5.00 : 3.00;
-    
-    user.balance += reward;
-    user.tasksCompleted += 1;
-    await dbAdapter.saveUser(normalizedEmail, user);
+    if (selectedIndex === currentQuestion.correctIndex) {
+      // Reward amount calculations: $5 even, $3 odd index
+      const reward = user.tasksCompleted % 2 === 0 ? 5.00 : 3.00;
+      
+      user.balance += reward;
+      user.tasksCompleted += 1;
+      await dbAdapter.saveUser(normalizedEmail, user);
 
-    const { password: _, ...safeUser } = user;
-    return res.json({
-      correct: true,
-      reward,
-      user: safeUser,
-      explanation: currentQuestion.explanation,
-      nextIndex: user.tasksCompleted
-    });
-  } else {
-    // Wrong answer, no progress
-    const { password: _, ...safeUser } = user;
-    return res.json({
-      correct: false,
-      user: safeUser,
-      message: 'إجابة خاطئة! حاول مجدداً لتحصيل الأرباح النخبوية والارتقاء في الفراغ الكوني.'
-    });
+      const { password: _, ...safeUser } = user;
+      return res.json({
+        correct: true,
+        reward,
+        user: safeUser,
+        explanation: currentQuestion.explanation,
+        nextIndex: user.tasksCompleted
+      });
+    } else {
+      // Wrong answer, no progress
+      const { password: _, ...safeUser } = user;
+      return res.json({
+        correct: false,
+        user: safeUser,
+        message: 'إجابة خاطئة! حاول مجدداً لتحصيل الأرباح النخبوية والارتقاء في الفراغ الكوني.'
+      });
+    }
+  } catch (error) {
+    console.error('Error in /api/quiz/submit:', error);
+    return res.status(500).json({ error: 'عذراً، فشل تسجيل إجابتك أو الاتصال بالخادم.' });
   }
 });
 
 // Upgrade activation registration (BEP-20 Manual Crypto payment)
 app.post('/api/upgrade/submit', async (req, res) => {
-  const { email, customTxId } = req.body;
-  if (!email || !customTxId) {
-    return res.status(400).json({ error: 'يرجى إدخال عنوان الإرسال أو رقم المعاملة TxID بشكل صحيح' });
+  try {
+    const { email, customTxId } = req.body;
+    if (!email || !customTxId) {
+      return res.status(400).json({ error: 'يرجى إدخال عنوان الإرسال أو رقم المعاملة TxID بشكل صحيح' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير مسجل' });
+    }
+
+    user.customTxId = customTxId.trim();
+    user.manualDepositStatus = 'pending';
+    await dbAdapter.saveUser(normalizedEmail, user);
+
+    const { password: _, ...safeUser } = user;
+    return res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/upgrade/submit:', error);
+    return res.status(500).json({ error: 'عذراً، فشل تسجيل طلب الترقية.' });
   }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) {
-    return res.status(404).json({ error: 'المستخدم غير مسجل' });
-  }
-
-  user.customTxId = customTxId.trim();
-  user.manualDepositStatus = 'pending';
-  await dbAdapter.saveUser(normalizedEmail, user);
-
-  const { password: _, ...safeUser } = user;
-  return res.json({ success: true, user: safeUser });
 });
 
 // Admin features
@@ -452,77 +482,102 @@ const adminGate = (req: express.Request, res: express.Response, next: express.Ne
 };
 
 app.get('/api/admin/metrics', adminGate, async (req, res) => {
-  const users = await dbAdapter.getAllUsers();
-  const totalUsers = users.length;
-  const totalBalances = users.reduce((acc, curr) => acc + curr.balance, 0);
-  const pendingActivations = users.filter(u => u.manualDepositStatus === 'pending').length;
-  const totalTasksCompleted = users.reduce((acc, curr) => acc + curr.tasksCompleted, 0);
+  try {
+    const users = await dbAdapter.getAllUsers();
+    const totalUsers = users.length;
+    const totalBalances = users.reduce((acc, curr) => acc + curr.balance, 0);
+    const pendingActivations = users.filter(u => u.manualDepositStatus === 'pending').length;
+    const totalTasksCompleted = users.reduce((acc, curr) => acc + curr.tasksCompleted, 0);
 
-  res.json({
-    totalUsers,
-    totalBalances,
-    pendingActivations,
-    totalTasksCompleted
-  });
+    res.json({
+      totalUsers,
+      totalBalances,
+      pendingActivations,
+      totalTasksCompleted
+    });
+  } catch (error) {
+    console.error('Error in /api/admin/metrics:', error);
+    return res.status(500).json({ error: 'failing to fetch metrics' });
+  }
 });
 
 app.get('/api/admin/users', adminGate, async (req, res) => {
-  const usersRaw = await dbAdapter.getAllUsers();
-  const users = usersRaw.map(({ password: _, ...u }) => u);
-  res.json({ users });
+  try {
+    const usersRaw = await dbAdapter.getAllUsers();
+    const users = usersRaw.map(({ password: _, ...u }) => u);
+    res.json({ users });
+  } catch (error) {
+    console.error('Error in /api/admin/users:', error);
+    return res.status(500).json({ error: 'failing to fetch admin users' });
+  }
 });
 
 app.post('/api/admin/approve', adminGate, async (req, res) => {
-  const { userEmail } = req.body;
-  if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
+  try {
+    const { userEmail } = req.body;
+    if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
 
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
 
-  user.manualDepositStatus = 'approved';
-  user.depositStatus = true;
-  await dbAdapter.saveUser(normalizedEmail, user);
+    user.manualDepositStatus = 'approved';
+    user.depositStatus = true;
+    await dbAdapter.saveUser(normalizedEmail, user);
 
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser });
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/admin/approve:', error);
+    return res.status(500).json({ error: 'failing to approve user' });
+  }
 });
 
 app.post('/api/admin/reject', adminGate, async (req, res) => {
-  const { userEmail } = req.body;
-  if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
+  try {
+    const { userEmail } = req.body;
+    if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني للمستخدم مطلوب' });
 
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر' });
 
-  user.manualDepositStatus = 'rejected';
-  user.depositStatus = false;
-  await dbAdapter.saveUser(normalizedEmail, user);
+    user.manualDepositStatus = 'rejected';
+    user.depositStatus = false;
+    await dbAdapter.saveUser(normalizedEmail, user);
 
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser });
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/admin/reject:', error);
+    return res.status(500).json({ error: 'failing to reject user' });
+  }
 });
 
 app.post('/api/admin/override', adminGate, async (req, res) => {
-  const { userEmail, newBalance, newTasksCompleted } = req.body;
-  if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+  try {
+    const { userEmail, newBalance, newTasksCompleted } = req.body;
+    if (!userEmail) return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
 
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  const user = await dbAdapter.getUser(normalizedEmail);
-  if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر في قاعدة البيانات' });
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    const user = await dbAdapter.getUser(normalizedEmail);
+    if (!user) return res.status(404).json({ error: 'المستخدم غير متوفر في قاعدة البيانات' });
 
-  if (newBalance !== undefined) {
-    user.balance = parseFloat(newBalance);
+    if (newBalance !== undefined) {
+      user.balance = parseFloat(newBalance);
+    }
+    if (newTasksCompleted !== undefined) {
+      user.tasksCompleted = parseInt(newTasksCompleted, 10);
+    }
+
+    await dbAdapter.saveUser(normalizedEmail, user);
+
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: safeUser });
+  } catch (error) {
+    console.error('Error in /api/admin/override:', error);
+    return res.status(500).json({ error: 'failing to override user' });
   }
-  if (newTasksCompleted !== undefined) {
-    user.tasksCompleted = parseInt(newTasksCompleted, 10);
-  }
-
-  await dbAdapter.saveUser(normalizedEmail, user);
-
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser });
 });
 
 // Setup dev and production servers
